@@ -150,16 +150,33 @@ def export_word_to_pdf(source: Path, destination: Path, cfg: dict) -> tuple[bool
         doc = word.Documents.Open(str(workdoc.resolve()), ReadOnly=False, AddToRecentFiles=False, Visible=False, ConfirmConversions=False)
         fulltext = doc.Content.Text or ""
         low = fulltext.casefold()
+        indicator_pos = -1
+        indicator_used = ""
         for indicator in indicators:
             pos = low.find(indicator)
             if pos >= 0:
                 video_found = True
+                indicator_pos = pos
+                indicator_used = indicator
                 break
-        # Link only the configured clickable word, and only in a document with a video callout.
+        # Anchor the configured word near the video callout, never an unrelated
+        # occurrence elsewhere in the report.
         if video_found and url and click_text:
-            pos = low.rfind(click_text.casefold())
-            if pos >= 0:
-                anchor = doc.Range(pos, pos + len(click_text))
+            paragraph_start = low.rfind("\\r", 0, indicator_pos)
+            paragraph_end = low.find("\\r", indicator_pos)
+            if paragraph_start < 0:
+                paragraph_start = max(0, indicator_pos - 100)
+            if paragraph_end < 0:
+                paragraph_end = min(len(low), indicator_pos + 220)
+            else:
+                paragraph_end = min(paragraph_end, indicator_pos + 220)
+            search_start = max(0, paragraph_start)
+            search_end = min(len(low), paragraph_end)
+            local_click = low.find(click_text.casefold(), search_start, search_end)
+            if local_click < 0:
+                local_click = low.find(click_text.casefold(), indicator_pos, min(len(low), indicator_pos + 120))
+            if local_click >= 0:
+                anchor = doc.Range(local_click, local_click + len(click_text))
                 try:
                     doc.Hyperlinks.Add(Anchor=anchor, Address=url, ScreenTip="Saiba mais")
                     link_added = True
@@ -193,11 +210,19 @@ def apply_pdf_footer(pdf_path: Path, cfg: dict) -> None:
         raise RuntimeError("O PDF não contém páginas.")
     page = doc[-1]
     rect = page.rect
-    # Reserve a subtle footer in the bottom margin; do not cover report content.
-    y = rect.height - 22
+    # Replace an existing copy of the configurable footer on the last page,
+    # avoiding duplicate footer text when the source DOCX already has one.
     brand = str(cfg.get("footer_brand", DEFAULTS["footer_brand"])).strip()
     label = str(cfg.get("footer_date_label", DEFAULTS["footer_date_label"])).strip()
     date_text = str(cfg.get("footer_date", "")).strip()
+    for old_text in (brand, label):
+        if old_text:
+            for hit in page.search_for(old_text):
+                page.add_redact_annot(hit, fill=(1, 1, 1))
+    if brand or label:
+        page.apply_redactions(images=0, graphics=0)
+    # Reserve a subtle footer in the bottom margin.
+    y = rect.height - 22
     left = brand
     right = f"{label} {date_text}".strip()
     font_size = 7.5
