@@ -158,6 +158,77 @@ def output_filename(path: Path, cfg: dict) -> str:
     return result if result.lower().endswith(".pdf") else result + ".pdf"
 
 
+def apply_typography_rules(doc) -> list[str]:
+    """Apply agreed typography to editable Word text while preserving layout objects."""
+    warnings = []
+    try:
+        # Text in the document body and tables; embedded charts/images remain untouched.
+        body = doc.Content
+        body.Font.Name = "Open Sans"
+        body.Font.Bold = 0
+        body.Font.Italic = 0
+        body.Font.Size = 10
+    except Exception as exc:
+        warnings.append(f"não foi possível normalizar o corpo em Open Sans: {exc}")
+
+    section_titles = (
+        "introdução", "informações gerais", "histórico de rentabilidade",
+        "rentabilidade do plano", "comparativo com o mercado",
+        "composição da carteira", "ativos que compõem uma carteira",
+        "evolução do patrimônio líquido", "análise da equipe de investimentos",
+    )
+    try:
+        for paragraph in doc.Paragraphs:
+            text = (paragraph.Range.Text or "").strip().replace("\\r", "").replace("\\x07", "")
+            if not text:
+                continue
+            low = text.casefold()
+            font = paragraph.Range.Font
+            if "raio" in low and "investimentos" in low and len(text) < 90:
+                font.Name = "Campton SemiBold"
+                font.Bold = -1
+                font.Size = 22
+            elif any(low.startswith(title) for title in section_titles):
+                font.Name = "Campton SemiBold"
+                font.Bold = -1
+                font.Size = 15
+            elif re.match(r"(?i)^plano\\s+.+", text) and len(text) < 100:
+                font.Name = "Campton SemiBold"
+                font.Bold = -1
+                font.Size = 14
+            elif re.match(r"(?i)^(?:\\*{1,2}|fonte de informações|fonte indicadores)", text):
+                font.Name = "Open Sans"
+                font.Size = 8
+            # The six asset descriptions commonly place the heading before a colon
+            # in the same paragraph. Format the heading run separately.
+            elif ":" in text and any(key in low for key in (
+                "renda fixa", "multimercado", "empréstimos", "renda variável", "exterior", "imobiliário"
+            )):
+                font.Name = "Open Sans Light"
+                font.Italic = -1
+                font.Bold = 0
+                colon = text.find(":")
+                try:
+                    heading = paragraph.Range.Duplicate
+                    heading.End = heading.Start + colon
+                    heading.Font.Name = "Open Sans"
+                    heading.Font.Bold = -1
+                    heading.Font.Italic = -1
+                except Exception:
+                    warnings.append(f"não foi possível destacar o título do bloco: {text[:45]}")
+        # Table contents often hold the return history and indicator comparison.
+        for table in doc.Tables:
+            for row in table.Rows:
+                for cell in row.Cells:
+                    try:
+                        cell.Range.Font.Name = "Open Sans"
+                    except Exception:
+                        pass
+    except Exception as exc:
+        warnings.append(f"aplicação tipográfica parcial: {exc}")
+    return warnings
+
+
 def export_word_to_pdf(source: Path, destination: Path, cfg: dict) -> tuple[bool, str]:
     """Export with Word COM; isolate hyperlink failures and retry PDF export once."""
     import pythoncom
@@ -191,6 +262,10 @@ def export_word_to_pdf(source: Path, destination: Path, cfg: dict) -> tuple[bool
             logging.exception("Primeira tentativa de abertura falhou para %s; tentando abertura simples", source.name)
             doc = word.Documents.Open(str(workdoc.resolve()), ReadOnly=False, AddToRecentFiles=False)
 
+        stage = "aplicar tipografia"
+        typography_warnings = apply_typography_rules(doc)
+        for warning in typography_warnings:
+            logging.warning("%s | %s", source.name, warning)
         stage = "detectar chamada de vídeo"
         fulltext = doc.Content.Text or ""
         low = fulltext.casefold()
@@ -264,7 +339,7 @@ def export_word_to_pdf(source: Path, destination: Path, cfg: dict) -> tuple[bool
                 logging.exception("Could not quit Word")
         pythoncom.CoUninitialize()
         shutil.rmtree(tmpdir, ignore_errors=True)
-    return video_found, ("link inserido" if link_added else ("vídeo detectado, mas link não inserido" if video_found else "sem chamada de vídeo"))
+    return video_found, ("link inserido" if link_added else ("vídeo detectado, mas link não inserido" if video_found else "sem chamada de vídeo")) + (f" | {len(typography_warnings)} aviso(s) de tipografia" if typography_warnings else " | tipografia aplicada")
 
 def apply_pdf_footer(pdf_path: Path, cfg: dict) -> None:
     """Draw a configurable footer on the last PDF page only."""
