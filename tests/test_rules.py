@@ -21,7 +21,7 @@ class NamingRulesTests(unittest.TestCase):
             self.assertEqual(month, "agosto de 2026")
             self.assertEqual(
                 app.output_filename(src, app.DEFAULTS.copy()),
-                "CD CPFL - Raio X de agosto de 2026.pdf",
+                "CD CPFL - Raio X de agosto.pdf",
             )
 
     def test_override_values_win(self):
@@ -35,7 +35,7 @@ class NamingRulesTests(unittest.TestCase):
             cfg["competency_override"] = "setembro de 2026"
             self.assertEqual(
                 app.output_filename(src, cfg),
-                "Plano escolhido - Raio X de setembro de 2026.pdf",
+                "Plano escolhido - Raio X de setembro.pdf",
             )
 
     def test_invalid_filename_characters_are_sanitized(self):
