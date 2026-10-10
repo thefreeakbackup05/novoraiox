@@ -24,7 +24,7 @@ DEFAULTS = {
     "plan_name_override": "",
     "competency_override": "",
     "link_url": "",
-    "video_indicators": "nesse vídeo; neste vídeo;vídeo",
+    "video_indicators": "nesse vídeo; neste vídeo;nesse vídeo - aqui;nesse vídeo — aqui;neste vídeo - aqui;neste vídeo — aqui",
     "clickable_text": "aqui",
     "footer_brand": "Vivest • Raio-X de Investimentos",
     "footer_date_label": "Documento fechado em:",
@@ -113,13 +113,17 @@ def safe_filename(s: str) -> str:
 def output_filename(path: Path, cfg: dict) -> str:
     plan, month = infer_plan_and_month(path, cfg)
     pattern = str(cfg.get("filename_pattern", DEFAULTS["filename_pattern"]))
+    month_only = re.sub(r"\\s+de\\s+\\d{4}$", "", month, flags=re.I).strip()
+    year_match = re.search(r"\\d{4}", month)
     tokens = {
         "[NOME DO PLANO]": plan,
         "[NOME DO PLANO NO WORD]": plan,
-        "[MÊS DO RAIO X]": month,
-        "[MES DO RAIO X]": month,
+        "[MÊS DO RAIO X]": month_only,
+        "[MES DO RAIO X]": month_only,
+        "[COMPETÊNCIA]": month,
+        "[COMPETENCIA]": month,
         "[ARQUIVO DE ORIGEM]": path.stem,
-        "[ANO]": re.search(r"\d{4}", month).group(0) if re.search(r"\d{4}", month) else str(datetime.now().year),
+        "[ANO]": year_match.group(0) if year_match else str(datetime.now().year),
     }
     for token, value in tokens.items():
         pattern = pattern.replace(token, value)
