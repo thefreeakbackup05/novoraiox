@@ -21,8 +21,10 @@ jobs:
           cache: pip
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Syntax check
+        run: python -m py_compile app.py
       - name: Build executable
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name NovoRaioX --hidden-import=pythoncom --hidden-import=pywintypes --hidden-import=win32com.client app.py
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name NovoRaioX --hidden-import=pythoncom --hidden-import=pywintypes --hidden-import=win32com.client --collect-all=fitz app.py
       - name: Include default config
         shell: pwsh
         run: Copy-Item config.json dist/config.json
