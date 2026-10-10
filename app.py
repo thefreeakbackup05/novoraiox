@@ -447,7 +447,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(f"{APP_NAME} — Gerador Word v{VERSION}")
-        self.geometry("1040x800")
+        self.geometry("1080x840")
         self.minsize(900, 700)
         self.cfg = load_config()
         self.vars = {}
@@ -458,12 +458,21 @@ class App(tk.Tk):
         style = ttk.Style(self)
         try: style.theme_use("clam")
         except tk.TclError: pass
-        style.configure("Title.TLabel", font=("Segoe UI", 18, "bold"), foreground="#17365d")
-        outer = ttk.Frame(self, padding=16)
+        self.configure(bg="#101827")
+        style.configure(".", background="#101827", foreground="#e5e7eb", font=("Segoe UI", 10))
+        style.configure("TFrame", background="#101827")
+        style.configure("TLabel", background="#101827", foreground="#cbd5e1")
+        style.configure("Title.TLabel", font=("Segoe UI", 20, "bold"), foreground="#f8fafc", background="#101827")
+        style.configure("TButton", background="#273449", foreground="#f8fafc", padding=(12, 7), borderwidth=0)
+        style.map("TButton", background=[("active", "#364761"), ("disabled", "#1f2937")])
+        style.configure("TEntry", fieldbackground="#1f2937", foreground="#f8fafc", insertcolor="#f8fafc")
+        style.configure("TCheckbutton", background="#101827", foreground="#cbd5e1")
+        style.configure("Horizontal.TProgressbar", troughcolor="#1f2937", background="#38bdf8")
+        outer = ttk.Frame(self, padding=18)
         outer.pack(fill="both", expand=True)
         ttk.Label(outer, text="RAIO-X DE INVESTIMENTOS", style="Title.TLabel").pack(anchor="w")
         ttk.Label(outer, text="Geração a partir de Word (.docx), com nome, hiperlink e rodapé configuráveis.").pack(anchor="w", pady=(2, 12))
-        canvas = tk.Canvas(outer, highlightthickness=0)
+        canvas = tk.Canvas(outer, highlightthickness=0, bg="#101827")
         scroll = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
         body = ttk.Frame(canvas, padding=(2, 2, 10, 2))
         body.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
@@ -501,7 +510,7 @@ class App(tk.Tk):
         self.progress.pack(fill="x", pady=(4, 4))
         self.status = tk.StringVar(value="Pronto.")
         ttk.Label(body, textvariable=self.status).pack(anchor="w", pady=(0, 6))
-        self.log = tk.Text(body, height=10, wrap="word", font=("Consolas", 9))
+        self.log = tk.Text(body, height=10, wrap="word", font=("Consolas", 9), bg="#0b1220", fg="#dbeafe", insertbackground="#f8fafc", relief="flat", padx=10, pady=8)
         self.log.pack(fill="both", expand=True)
 
     def _section(self, parent, title):
