@@ -18,7 +18,7 @@ Aplicativo Windows para gerar PDFs a partir de documentos Word `.docx`, com conf
 Arquivos temporários do Word (prefixo `~$`) são ignorados. Um erro em um documento não interrompe o lote.
 
 ## Configurações disponíveis
-- **Nome do PDF:** padrão configurável com tokens `[NOME DO PLANO]`, `[NOME DO PLANO NO WORD]`, `[MÊS DO RAIO X]`, `[ANO]` e `[ARQUIVO DE ORIGEM]`. Nome do plano e competência podem ser informados manualmente; vazios, o programa tenta detectá-los no texto do Word.
+- **Nome do PDF:** padrão configurável com tokens `[NOME DO PLANO]`, `[NOME DO PLANO NO WORD]`, `[MÊS DO RAIO X]`, `[COMPETÊNCIA]`, `[ANO]` e `[ARQUIVO DE ORIGEM]`. Nome do plano e competência podem ser informados manualmente; vazios, o programa tenta detectá-los no texto do Word.
 - **Hiperlink:** URL, palavras indicadoras de vídeo e texto clicável configuráveis. A tentativa de inserir o link só ocorre se um indicador estiver presente no documento.
 - **Rodapé da última página:** texto institucional, rótulo e data `dd/mm/aaaa` configuráveis. A aplicação desenha o rodapé na última página do PDF.
 - **Sobrescrita:** por padrão, não substitui PDFs existentes.
