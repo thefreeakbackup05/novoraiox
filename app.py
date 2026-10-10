@@ -179,7 +179,7 @@ def apply_typography_rules(doc) -> list[str]:
     )
     try:
         for paragraph in doc.Paragraphs:
-            text = (paragraph.Range.Text or "").strip().replace("\\r", "").replace("\\x07", "")
+            text = (paragraph.Range.Text or "").strip().replace("\r", "").replace("\x07", "")
             if not text:
                 continue
             low = text.casefold()
@@ -192,11 +192,11 @@ def apply_typography_rules(doc) -> list[str]:
                 font.Name = "Campton SemiBold"
                 font.Bold = -1
                 font.Size = 15
-            elif re.match(r"(?i)^plano\\s+.+", text) and len(text) < 100:
+            elif re.match(r"(?i)^plano\s+.+", text) and len(text) < 100:
                 font.Name = "Campton SemiBold"
                 font.Bold = -1
                 font.Size = 14
-            elif re.match(r"(?i)^(?:\\*{1,2}|fonte de informações|fonte indicadores)", text):
+            elif re.match(r"(?i)^(?:\*{1,2}|fonte de informações|fonte indicadores)", text):
                 font.Name = "Open Sans"
                 font.Size = 8
             # The six asset descriptions commonly place the heading before a colon
