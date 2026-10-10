@@ -113,8 +113,8 @@ def safe_filename(s: str) -> str:
 def output_filename(path: Path, cfg: dict) -> str:
     plan, month = infer_plan_and_month(path, cfg)
     pattern = str(cfg.get("filename_pattern", DEFAULTS["filename_pattern"]))
-    month_only = re.sub(r"\\s+de\\s+\\d{4}$", "", month, flags=re.I).strip()
-    year_match = re.search(r"\\d{4}", month)
+    month_only = re.sub(r"\s+de\s+\d{4}$", "", month, flags=re.I).strip()
+    year_match = re.search(r"\d{4}", month)
     tokens = {
         "[NOME DO PLANO]": plan,
         "[NOME DO PLANO NO WORD]": plan,
