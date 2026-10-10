@@ -140,7 +140,7 @@ def safe_filename(s: str) -> str:
 def output_filename(path: Path, cfg: dict) -> str:
     plan, month = infer_plan_and_month(path, cfg)
     pattern = str(cfg.get("filename_pattern", DEFAULTS["filename_pattern"]))
-    month_only = re.sub(r"\s+de\s+\d{4}$", "", month, flags=re.I).strip()
+    month_only = re.sub(r"\s+de\s+\d{4}$", "", month, flags=re.I).strip().capitalize()
     year_match = re.search(r"\d{4}", month)
     tokens = {
         "[NOME DO PLANO]": plan,
@@ -159,7 +159,7 @@ def output_filename(path: Path, cfg: dict) -> str:
 
 
 def export_word_to_pdf(source: Path, destination: Path, cfg: dict) -> tuple[bool, str]:
-    """Use Word COM on a temporary DOCX copy; never alter the source document."""
+    """Export with Word COM; isolate hyperlink failures and retry PDF export once."""
     import pythoncom
     import win32com.client
 
@@ -174,46 +174,83 @@ def export_word_to_pdf(source: Path, destination: Path, cfg: dict) -> tuple[bool
     doc = None
     video_found = False
     link_added = False
+    stage = "iniciar Word"
     try:
         word = win32com.client.DispatchEx("Word.Application")
         word.Visible = False
         word.DisplayAlerts = 0
-        doc = word.Documents.Open(str(workdoc.resolve()), ReadOnly=False, AddToRecentFiles=False, Visible=False, ConfirmConversions=False)
+        word.Options.ConfirmConversions = False
+        stage = "abrir documento"
+        try:
+            doc = word.Documents.Open(
+                FileName=str(workdoc.resolve()), ConfirmConversions=False,
+                ReadOnly=False, AddToRecentFiles=False, Visible=False,
+                OpenAndRepair=True, NoEncodingDialog=True,
+            )
+        except Exception:
+            logging.exception("Primeira tentativa de abertura falhou para %s; tentando abertura simples", source.name)
+            doc = word.Documents.Open(str(workdoc.resolve()), ReadOnly=False, AddToRecentFiles=False)
+
+        stage = "detectar chamada de vídeo"
         fulltext = doc.Content.Text or ""
         low = fulltext.casefold()
         indicator_pos = -1
-        indicator_used = ""
         for indicator in indicators:
             pos = low.find(indicator)
             if pos >= 0:
                 video_found = True
                 indicator_pos = pos
-                indicator_used = indicator
                 break
-        # Anchor the configured word near the video callout, never an unrelated
-        # occurrence elsewhere in the report.
+
         if video_found and url and click_text:
-            paragraph_start = low.rfind("\\r", 0, indicator_pos)
-            paragraph_end = low.find("\\r", indicator_pos)
+            # Word's range offsets use carriage returns, not the literal two-character
+            # sequence "\\r". Limit search to the callout paragraph to avoid unrelated links.
+            paragraph_start = low.rfind("\r", 0, indicator_pos)
+            paragraph_end = low.find("\r", indicator_pos)
             if paragraph_start < 0:
                 paragraph_start = max(0, indicator_pos - 100)
             if paragraph_end < 0:
                 paragraph_end = min(len(low), indicator_pos + 220)
-            else:
-                paragraph_end = min(paragraph_end, indicator_pos + 220)
-            search_start = max(0, paragraph_start)
-            search_end = min(len(low), paragraph_end)
-            local_click = low.find(click_text.casefold(), search_start, search_end)
+            local_click = low.find(click_text.casefold(), paragraph_start, min(paragraph_end, indicator_pos + 220))
             if local_click < 0:
                 local_click = low.find(click_text.casefold(), indicator_pos, min(len(low), indicator_pos + 120))
             if local_click >= 0:
-                anchor = doc.Range(local_click, local_click + len(click_text))
+                stage = "inserir hiperlink"
                 try:
+                    anchor = doc.Range(local_click, local_click + len(click_text))
                     doc.Hyperlinks.Add(Anchor=anchor, Address=url, ScreenTip="Saiba mais")
                     link_added = True
                 except Exception:
-                    logging.exception("Could not add hyperlink to %s", source.name)
-        doc.ExportAsFixedFormat(str(destination.resolve()), 17, False, 0, 0, 1, 1, 0, True, True, 0, True, True, False)
+                    logging.exception("Falha ao inserir hiperlink em %s; a exportação continuará sem link", source.name)
+
+        stage = "exportar PDF"
+        try:
+            doc.ExportAsFixedFormat(
+                OutputFileName=str(destination.resolve()),
+                ExportFormat=17,
+                OpenAfterExport=False,
+                OptimizeFor=0,
+                Range=0,
+                From=1,
+                To=1,
+                Item=0,
+                IncludeDocProps=True,
+                KeepIRM=True,
+                CreateBookmarks=0,
+                DocStructureTags=True,
+                BitmapMissingFonts=True,
+                UseISO19005_1=False,
+            )
+        except Exception:
+            logging.exception("ExportAsFixedFormat falhou para %s; tentando SaveAs2 PDF", source.name)
+            try:
+                if destination.exists():
+                    destination.unlink()
+                doc.SaveAs2(FileName=str(destination.resolve()), FileFormat=17, AddToRecentFiles=False)
+            except Exception as fallback_exc:
+                raise RuntimeError(f"Falha na etapa '{stage}' via ExportAsFixedFormat e SaveAs2: {fallback_exc}") from fallback_exc
+    except Exception as exc:
+        raise RuntimeError(f"Falha na etapa '{stage}' para '{source.name}': {exc}") from exc
     finally:
         if doc is not None:
             try:
@@ -228,7 +265,6 @@ def export_word_to_pdf(source: Path, destination: Path, cfg: dict) -> tuple[bool
         pythoncom.CoUninitialize()
         shutil.rmtree(tmpdir, ignore_errors=True)
     return video_found, ("link inserido" if link_added else ("vídeo detectado, mas link não inserido" if video_found else "sem chamada de vídeo"))
-
 
 def apply_pdf_footer(pdf_path: Path, cfg: dict) -> None:
     """Draw a configurable footer on the last PDF page only."""
