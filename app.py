@@ -77,32 +77,59 @@ def docx_text(path: Path) -> str:
 
 def infer_plan_and_month(path: Path, cfg: dict) -> tuple[str, str]:
     text = docx_text(path)
+    flat = re.sub(r"[\u00a0\t]+", " ", text)
     plan = str(cfg.get("plan_name_override", "")).strip()
     month = str(cfg.get("competency_override", "")).strip()
-    if not plan:
-        for pattern in (r"(?im)^\s*Plano\s+(.+?)\s*$", r"(?im)^\s*Nome do plano\s*[:\-]\s*(.+?)\s*$"):
-            m = re.search(pattern, text)
-            if m:
-                plan = m.group(1).strip()
-                break
-    if not month:
-        m = re.search(r"(?im)^\s*(janeiro|fevereiro|março|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)(?:\s+de)?\s+(\d{4})\s*$", text)
-        if m:
-            month = f"{m.group(1).lower()} de {m.group(2)}"
-        else:
-            m = re.search(r"(?i)\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[./ -]?(\d{2,4})\b", path.stem)
-            if m:
-                short = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"]
-                month_name = MONTHS[short.index(m.group(1).lower())]
-                year = m.group(2)
-                month = f"{month_name} de {('20' + year) if len(year) == 2 else year}"
-    if not plan:
-        plan = path.stem
-    if not month:
-        month = datetime.now().strftime("%B de %Y")
-        month = month.replace("January", "janeiro").replace("February", "fevereiro").replace("March", "março").replace("April", "abril").replace("May", "maio").replace("June", "junho").replace("July", "julho").replace("August", "agosto").replace("September", "setembro").replace("October", "outubro").replace("November", "novembro").replace("December", "dezembro")
-    return plan, month
 
+    # DOCX text may contain cover information split across paragraphs, text boxes,
+    # or line breaks. Search flexibly instead of requiring a perfect whole line.
+    if not plan:
+        patterns = (
+            r"(?im)\bPlano\s+([^\r\n|]+)",
+            r"(?im)\bNome do plano\s*[:\-]\s*([^\r\n|]+)",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, flat)
+            if match:
+                candidate = match.group(1).strip().strip('"“” ')
+                candidate = re.sub(r"\s{2,}.*$", "", candidate).strip()
+                if candidate:
+                    plan = candidate
+                    break
+
+    if not month:
+        months_pattern = "|".join(MONTHS)
+        match = re.search(rf"(?i)\b({months_pattern})\s*(?:de\s*)?(\d{{4}})\b", flat)
+        if match:
+            month = f"{match.group(1).lower()} de {match.group(2)}"
+        else:
+            # Handle common file stems such as FORD_8_2026_Raio-X_OK.docx,
+            # AUREN_CD_8_2026_OK.docx and PSAP_Auren_ago_26.docx.
+            stem = path.stem.casefold()
+            match = re.search(r"(?<!\d)(0?[1-9]|1[0-2])[_ .-]+(20\d{2})(?!\d)", stem)
+            if match:
+                month = f"{MONTHS[int(match.group(1)) - 1]} de {match.group(2)}"
+            else:
+                short = {"jan":0,"fev":1,"mar":2,"abr":3,"mai":4,"jun":5,
+                         "jul":6,"ago":7,"set":8,"out":9,"nov":10,"dez":11}
+                match = re.search(r"(?i)\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[._ -]?(\d{2,4})\b", stem)
+                if match:
+                    year = match.group(2)
+                    month = f"{MONTHS[short[match.group(1).lower()]]} de {('20' + year) if len(year) == 2 else year}"
+
+    if not plan:
+        # Fall back to the source filename after removing technical prefixes,
+        # competency markers and processing suffixes.
+        candidate = path.stem
+        candidate = re.sub(r"(?i)(?:^|[_ -])(?:raio[- _]?x|ok|final|aprovado)(?:$|[_ -].*)", "", candidate)
+        candidate = re.sub(r"(?i)^(?:\d{1,2}[_ .-]+20\d{2}[_ .-]*)", "", candidate)
+        candidate = re.sub(r"(?i)(?:[_ .-]+(?:0?[1-9]|1[0-2])[_ .-]+20\d{2})", "", candidate)
+        candidate = re.sub(r"[_]+", " ", candidate).strip(" _-.")
+        plan = candidate or path.stem
+
+    if not month:
+        month = f"{MONTHS[datetime.now().month - 1]} de {datetime.now().year}"
+    return plan, month
 
 def safe_filename(s: str) -> str:
     s = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", s)
