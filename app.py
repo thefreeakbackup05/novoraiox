@@ -174,7 +174,7 @@ def apply_typography_rules(doc) -> list[str]:
     section_titles = (
         "introdução", "informações gerais", "histórico de rentabilidade",
         "rentabilidade do plano", "comparativo com o mercado",
-        "composição da carteira", "ativos que compõem uma carteira",
+        "composição da carteira",
         "evolução do patrimônio líquido", "análise da equipe de investimentos",
     )
     try:
@@ -188,10 +188,19 @@ def apply_typography_rules(doc) -> list[str]:
                 font.Name = "Campton SemiBold"
                 font.Bold = -1
                 font.Size = 22
+            elif low.startswith("ativos que compõem uma carteira"):
+                font.Name = "Open Sans"
+                font.Bold = -1
+                font.Italic = -1
+                font.Size = 10
             elif any(low.startswith(title) for title in section_titles):
                 font.Name = "Campton SemiBold"
                 font.Bold = -1
                 font.Size = 15
+            elif low.startswith("rentabilidade acumulada") or low.startswith("dados em mil") or low.startswith("plano na modalidade"):
+                font.Name = "Campton Light"
+                font.Bold = 0
+                font.Size = 11
             elif re.match(r"(?i)^plano\s+.+", text) and len(text) < 100:
                 font.Name = "Campton SemiBold"
                 font.Bold = -1
